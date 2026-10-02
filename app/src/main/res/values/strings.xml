@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">经期小组件</string>
+    <string name="widget_name">经期小组件</string>
+    <string name="widget_description">记录经期、预测周期、排卵日、易孕期</string>
+</resources>
