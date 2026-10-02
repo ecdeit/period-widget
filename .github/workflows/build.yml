@@ -18,18 +18,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # The hosted runner image already ships a JDK and the Android SDK, so no
-      # third-party setup action is needed. Fewer moving parts, fewer failures.
-      - name: Show toolchain
+      # The hosted runner already ships Temurin 17 and a full Android SDK at
+      # $ANDROID_HOME. What it does NOT do is put sdkmanager on PATH (that is
+      # done by android-actions/setup-android, which this workflow deliberately
+      # avoids). So sdkmanager is located explicitly instead of assumed.
+      - name: Ensure Android SDK packages
         run: |
-          java -version
+          set -e
+          echo "JDK:"; java -version
           echo "ANDROID_HOME=$ANDROID_HOME"
-          ls "$ANDROID_HOME" || true
 
-      - name: Install SDK packages
-        run: |
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager "platforms;android-34" "build-tools;34.0.0"
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f 2>/dev/null | head -n 1)"
+          echo "sdkmanager -> ${SDKMANAGER:-<not found>}"
+
+          if [ -n "$SDKMANAGER" ]; then
+            export PATH="$(dirname "$SDKMANAGER"):$PATH"
+            yes | sdkmanager --licenses > /dev/null 2>&1 || true
+            # Licences may still need accepting on a fresh image, hence yes.
+            yes | sdkmanager "platforms;android-34" "build-tools;34.0.0" || true
+          fi
+
+          echo "--- cmdline-tools layout ---"
+          find "$ANDROID_HOME/cmdline-tools" -maxdepth 2 2>/dev/null || true
+          echo "--- installed platforms ---"
+          ls "$ANDROID_HOME/platforms" || true
+          echo "--- installed build-tools ---"
+          ls "$ANDROID_HOME/build-tools" || true
+
+          test -d "$ANDROID_HOME/platforms/android-34"
+          test -d "$ANDROID_HOME/build-tools/34.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
