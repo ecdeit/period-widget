@@ -4,73 +4,76 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-class PeriodRepository(private val dao: PeriodDao) {
+/**
+ * Data access plus the observable state the UI renders.
+ *
+ * Without Room there is no Flow to collect, so the state is reloaded explicitly
+ * after every write. One table and one screen makes that the simpler contract.
+ */
+class PeriodRepository(private val store: PeriodStore) {
 
-    fun observePeriods(): LiveData<List<PeriodEntity>> = dao.observePeriods().asLiveData()
+    suspend fun all(): List<PeriodEntity> = withContext(Dispatchers.IO) { store.all() }
 
-    suspend fun periodsOnce(): List<PeriodEntity> = dao.getPeriodsOnce()
+    suspend fun add(startDate: String, length: Int) =
+        withContext(Dispatchers.IO) { store.upsert(startDate, length) }
 
-    suspend fun addPeriod(startDate: String, length: Int) {
-        dao.insertPeriod(PeriodEntity(startDate = startDate, length = length))
-    }
+    suspend fun remove(startDate: String) =
+        withContext(Dispatchers.IO) { store.delete(startDate) }
 
-    suspend fun removePeriod(startDate: String) {
-        dao.deletePeriod(startDate)
-    }
-
-    suspend fun clearAll() {
-        dao.clearAllPeriods()
-    }
+    suspend fun clear() = withContext(Dispatchers.IO) { store.clear() }
 }
 
 class PeriodViewModel(private val repository: PeriodRepository) : ViewModel() {
 
-    private val _periods = MutableLiveData<List<PeriodEntity>>()
+    private val _periods = MutableLiveData<List<PeriodEntity>>(emptyList())
     val periods: LiveData<List<PeriodEntity>> = _periods
 
-    private val _stats = MutableLiveData<CycleStats>()
+    private val _stats = MutableLiveData(CycleStats())
     val stats: LiveData<CycleStats> = _stats
 
-    private val _todayStatus = MutableLiveData<String>()
+    private val _todayStatus = MutableLiveData("正在读取…")
     val todayStatus: LiveData<String> = _todayStatus
 
     init {
+        refresh()
+    }
+
+    fun refresh() {
         viewModelScope.launch {
-            repository.observePeriods().observeForever { list ->
-                if (list != null) {
-                    val computed = CycleCalculator.computeStats(list)
-                    _periods.postValue(list)
-                    _stats.postValue(computed)
-                    _todayStatus.postValue(CycleCalculator.describeToday(list, computed))
-                }
-            }
+            val list = repository.all()
+            val computed = CycleCalculator.computeStats(list)
+            _periods.value = list
+            _stats.value = computed
+            _todayStatus.value = CycleCalculator.describeToday(list, computed)
         }
     }
 
     fun addPeriod(startDate: String, length: Int) {
-        viewModelScope.launch { repository.addPeriod(startDate, length) }
+        viewModelScope.launch {
+            repository.add(startDate, length)
+            refresh()
+        }
     }
 
     fun removePeriod(startDate: String) {
-        viewModelScope.launch { repository.removePeriod(startDate) }
+        viewModelScope.launch {
+            repository.remove(startDate)
+            refresh()
+        }
     }
 
     fun clearAll() {
-        viewModelScope.launch { repository.clearAll() }
+        viewModelScope.launch {
+            repository.clear()
+            refresh()
+        }
     }
 
-    fun calendar(year: Int, month: Int): List<List<DayStatus?>> {
-        val list = _periods.value ?: emptyList()
-        val current = _stats.value ?: CycleStats()
-        return CycleCalculator.generateCalendarMatrix(year, month, list, current)
-    }
-
-    /** Factory so the Activity can hand the repository in. */
     class Factory(private val repository: PeriodRepository) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {

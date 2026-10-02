@@ -1,6 +1,5 @@
 package com.example.periodwidget
 
-import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
@@ -14,8 +13,8 @@ import java.util.concurrent.TimeUnit
  * The widget host callback.
  *
  * This deliberately holds no rendering logic. onUpdate runs on the main thread,
- * so it cannot touch Room; it only schedules [WidgetUpdateWorker], which does
- * the read and the RemoteViews work on a background dispatcher.
+ * so it must not read the database; it only schedules [WidgetUpdateWorker],
+ * which does the read and the RemoteViews work on a background dispatcher.
  */
 class PeriodWidgetProvider : AppWidgetProvider() {
 

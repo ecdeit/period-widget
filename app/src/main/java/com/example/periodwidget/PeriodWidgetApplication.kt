@@ -1,24 +1,18 @@
 package com.example.periodwidget
 
 import android.app.Application
-import androidx.room.Room
 
 class PeriodWidgetApplication : Application() {
 
     @Volatile
-    private var instance: PeriodDatabase? = null
+    private var instance: PeriodStore? = null
 
     /**
-     * Lazily built and cached. Room's own builder is already thread-safe, but the
-     * reference is cached here so the widget worker and the UI never race to
-     * open the same file twice.
+     * Lazily built and cached so the widget worker and the UI never open two
+     * helpers against the same database file.
      */
-    val database: PeriodDatabase
+    val store: PeriodStore
         get() = instance ?: synchronized(this) {
-            instance ?: Room.databaseBuilder(
-                applicationContext,
-                PeriodDatabase::class.java,
-                "period_db"
-            ).fallbackToDestructiveMigration().build().also { instance = it }
+            instance ?: PeriodStore(applicationContext).also { instance = it }
         }
 }

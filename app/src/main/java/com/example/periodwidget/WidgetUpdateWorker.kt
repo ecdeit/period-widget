@@ -1,8 +1,10 @@
 package com.example.periodwidget
 
+import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.widget.RemoteViews
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
@@ -11,13 +13,13 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
 
 /**
  * Reads the database off the main thread and re-renders every placed widget.
  *
- * The provider itself cannot do this: onUpdate runs on the main thread, so any
- * database read there would be both illegal and invisible in the UI thread's
- * lifecycle. WorkManager is the supported place for it.
+ * The provider itself cannot do this: onUpdate runs on the main thread, so a
+ * database read there would block the UI. WorkManager is the supported place.
  */
 class WidgetUpdateWorker(
     context: Context,
@@ -27,8 +29,9 @@ class WidgetUpdateWorker(
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
             val app = applicationContext as PeriodWidgetApplication
-            val periods = PeriodRepository(app.database.periodDao()).periodsOnce()
+            val periods = app.store.all()
             val stats = CycleCalculator.computeStats(periods)
+            val status = CycleCalculator.getDayStatus(LocalDate.now(), periods, stats).status
             val todayStatus = CycleCalculator.describeToday(periods, stats)
 
             val manager = AppWidgetManager.getInstance(applicationContext)
@@ -36,7 +39,10 @@ class WidgetUpdateWorker(
                 ComponentName(applicationContext, PeriodWidgetProvider::class.java)
             )
             for (id in ids) {
-                manager.updateAppWidget(id, buildViews(applicationContext, id, stats, todayStatus))
+                manager.updateAppWidget(
+                    id,
+                    buildViews(applicationContext, id, stats, status, todayStatus)
+                )
             }
             Result.success()
         } catch (t: Throwable) {
@@ -48,6 +54,7 @@ class WidgetUpdateWorker(
         context: Context,
         appWidgetId: Int,
         stats: CycleStats,
+        status: DayStatus.DayStatusType,
         todayStatus: String
     ): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_layout)
@@ -63,9 +70,10 @@ class WidgetUpdateWorker(
                 ?: context.getString(R.string.widget_no_prediction)
         )
 
-        val (icon, color) = WidgetStyle.forToday(stats)
-        views.setImageViewResource(R.id.iv_status_icon, icon)
-        views.setTextColor(R.id.tv_today_status, color)
+        val look = WidgetStyle.forStatus(status)
+        views.setImageViewResource(R.id.iv_status_icon, look.icon)
+        // setTextColor takes an ARGB int, so the resource id must be resolved.
+        views.setTextColor(R.id.tv_today_status, context.getColor(look.colorRes))
 
         // Tap anywhere on the widget body to open the app.
         views.setOnClickPendingIntent(R.id.widget_root, openAppIntent(context, appWidgetId))
@@ -82,16 +90,16 @@ class WidgetUpdateWorker(
         context: Context,
         requestCode: Int,
         extra: String? = null
-    ): android.app.PendingIntent {
+    ): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             if (extra != null) putExtra(extra, true)
         }
-        return android.app.PendingIntent.getActivity(
+        return PendingIntent.getActivity(
             context,
             requestCode,
             intent,
-            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
     }
 

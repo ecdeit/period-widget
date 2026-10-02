@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,7 +23,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
@@ -61,7 +61,7 @@ class MainActivity : ComponentActivity() {
 
     private val viewModel: PeriodViewModel by viewModels {
         val app = application as PeriodWidgetApplication
-        PeriodViewModel.Factory(PeriodRepository(app.database.periodDao()))
+        PeriodViewModel.Factory(PeriodRepository(app.store))
     }
 
     private val openAddOnStart = mutableStateOf(false)
@@ -134,7 +134,7 @@ private fun PeriodScreen(
         Spacer(Modifier.height(16.dp))
         PredictionsCard(stats)
         Spacer(Modifier.height(16.dp))
-        CalendarCard(today, viewModel)
+        CalendarCard(today, periods, stats)
         Spacer(Modifier.height(16.dp))
         HistoryCard(periods, onRemove = { viewModel.removePeriod(it) })
         Spacer(Modifier.height(24.dp))
@@ -276,11 +276,13 @@ private fun PredictionLine(label: String, value: String?, color: Color, subtitle
 }
 
 @Composable
-private fun CalendarCard(today: LocalDate, viewModel: PeriodViewModel) {
+private fun CalendarCard(today: LocalDate, periods: List<PeriodEntity>, stats: CycleStats) {
     var monthOffset by remember { mutableStateOf(0) }
     val shown = remember(today, monthOffset) { today.plusMonths(monthOffset.toLong()) }
-    val matrix = remember(monthOffset, viewModel.periods.value) {
-        viewModel.calendar(shown.year, shown.monthValue)
+    // Recomputed when the data or the displayed month changes. The helper is a
+    // pure function, so this needs no hidden state and reacts to observed data.
+    val matrix = remember(shown.year, shown.monthValue, periods, stats) {
+        CycleCalculator.generateCalendarMatrix(shown.year, shown.monthValue, periods, stats)
     }
 
     Card(Modifier.fillMaxWidth()) {
@@ -317,8 +319,12 @@ private fun CalendarCard(today: LocalDate, viewModel: PeriodViewModel) {
     }
 }
 
+/**
+ * One calendar cell. Declared on RowScope because `Modifier.weight` is only
+ * available inside a Row/Column scope, and the seven cells share the row width.
+ */
 @Composable
-private fun DayCell(day: DayStatus?) {
+private fun RowScope.DayCell(day: DayStatus?) {
     if (day == null) {
         Box(Modifier.weight(1f).height(44.dp))
         return

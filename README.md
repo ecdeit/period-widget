@@ -11,7 +11,7 @@
 | 日历视图 | 月历标记经期/排卵/易孕/下次经期，可翻月 |
 | 历史记录 | 增删记录，显示每次持续天数 |
 | 自动刷新 | WorkManager 每 30 分钟刷新；开机后自动恢复 |
-| 隐私 | 无网络权限，数据仅存本地 Room 数据库 |
+| 隐私 | 无网络权限，数据仅存本机 SQLite |
 
 ## 预测逻辑
 
@@ -48,9 +48,8 @@ period-widget-native/
 ├── app/src/main/
 │   ├── java/com/example/periodwidget/
 │   │   ├── CycleCalculator.kt      预测算法（纯函数，可单测）
-│   │   ├── PeriodEntity.kt         Room 实体
-│   │   ├── PeriodDao.kt            数据库接口
-│   │   ├── PeriodDatabase.kt       Room 数据库
+│   │   ├── PeriodEntity.kt         记录数据类
+│   │   ├── PeriodStore.kt          SQLite 存储
 │   │   ├── PeriodRepository.kt     数据访问 + ViewModel
 │   │   ├── PeriodWidgetProvider.kt 小组件宿主回调
 │   │   ├── WidgetUpdateWorker.kt   后台读取并渲染小组件
@@ -66,5 +65,7 @@ period-widget-native/
 ## 技术选型说明
 
 - **AGP 8.5.2 + Gradle 8.9**：AGP 8.5 要求 Gradle ≥ 8.7，8.9 是验证过的组合。
+- **不用 Room / kapt**：只有一张表，手写 `SQLiteOpenHelper` 即可。Room 会引入注解处理器，而 `kotlin-kapt` 在根 `plugins {}` 块里声明版本会因缺少 plugin marker 而解析失败，属于纯增加的构建风险。
 - **WorkManager 承载刷新**：`AppWidgetProvider.onUpdate` 跑在主线程，不能读数据库，因此只负责调度，渲染放到 `WidgetUpdateWorker` 的 IO 线程。
+- **RemoteViews 的颜色要用 `Context.getColor` 解析**：`setTextColor` 收的是 ARGB int，直接传颜色资源 ID 会得到错误颜色。
 - **日期存 ISO 字符串而非时间戳**：经期是「日历日」而非「时刻」，用文本存储可避免时区变化导致的日期偏移，删除也能按开始日精确匹配。
