@@ -18,8 +18,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -34,7 +38,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,15 +48,20 @@ import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.flow.collect
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
@@ -152,6 +160,7 @@ private fun PeriodScreen(
 
     if (showAdd) {
         AddPeriodDialog(
+            defaultLength = stats.periodLength,
             onDismiss = { showAdd = false },
             onConfirm = { date, length ->
                 viewModel.addPeriod(date, length)
@@ -429,40 +438,196 @@ private fun HistoryCard(periods: List<PeriodEntity>, onRemove: (String) -> Unit)
     }
 }
 
+/**
+ * A snapping wheel column.
+ *
+ * Not built on Material's DatePicker because the request was specifically for a
+ * scroll wheel. It uses only stable APIs: a LazyColumn whose vertical content
+ * padding is half the leftover height, so the item at the top of the viewport is
+ * the centred one. After a drag settles, the list snaps to the nearest item and
+ * that item is reported as the selection.
+ */
 @Composable
-private fun AddPeriodDialog(onDismiss: () -> Unit, onConfirm: (String, Int) -> Unit) {
-    var dateText by remember { mutableStateOf(LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)) }
-    var lengthText by remember { mutableStateOf("5") }
+private fun WheelPicker(
+    items: List<String>,
+    selectedIndex: Int,
+    onSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    itemHeight: Dp = 36.dp,
+    visibleCount: Int = 5
+) {
+    val lastIndex = (items.size - 1).coerceAtLeast(0)
+    val state = rememberLazyListState()
+    val itemHeightPx = with(LocalDensity.current) { itemHeight.toPx() }
+    val outline = MaterialTheme.colorScheme.outlineVariant
+    val onSurface = MaterialTheme.colorScheme.onSurface
+
+    // Follow selection changes that originate outside the wheel, e.g. the day
+    // count shrinking when a shorter month is chosen.
+    LaunchedEffect(selectedIndex, items.size) {
+        val target = selectedIndex.coerceIn(0, lastIndex)
+        if (state.firstVisibleItemIndex != target || state.firstVisibleItemScrollOffset != 0) {
+            state.scrollToItem(target)
+        }
+    }
+
+    // Snap to the nearest row once scrolling stops, then publish the selection.
+    LaunchedEffect(state, items.size) {
+        snapshotFlow {
+            Triple(
+                state.isScrollInProgress,
+                state.firstVisibleItemIndex,
+                state.firstVisibleItemScrollOffset
+            )
+        }.collect { (scrolling, index, offset) ->
+            if (scrolling) return@collect
+            if (offset != 0) {
+                val target = (if (offset > itemHeightPx / 2f) index + 1 else index)
+                    .coerceIn(0, lastIndex)
+                state.animateScrollToItem(target)
+            } else {
+                val settled = index.coerceIn(0, lastIndex)
+                if (settled != selectedIndex) onSelected(settled)
+            }
+        }
+    }
+
+    Box(
+        modifier.height(itemHeight * visibleCount),
+        contentAlignment = Alignment.Center
+    ) {
+        LazyColumn(
+            state = state,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(vertical = itemHeight * (visibleCount / 2))
+        ) {
+            items(items.size) { index ->
+                val isCentred = index == selectedIndex
+                Box(
+                    Modifier.fillMaxWidth().height(itemHeight),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = items[index],
+                        fontSize = if (isCentred) 17.sp else 14.sp,
+                        fontWeight = if (isCentred) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isCentred) onSurface else outline
+                    )
+                }
+            }
+        }
+        // Selection band.
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(itemHeight)
+                .border(1.dp, outline, RoundedCornerShape(6.dp))
+        )
+    }
+}
+
+/**
+ * Records a period with wheel pickers instead of a typed date.
+ *
+ * Typing YYYY-MM-DD was both slow and error-prone; the wheels cannot produce an
+ * invalid date, the day column follows the chosen month (leap years included),
+ * and the length defaults to the user's own average.
+ */
+@Composable
+private fun AddPeriodDialog(
+    defaultLength: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (String, Int) -> Unit
+) {
+    val today = remember { LocalDate.now() }
+    val years = remember(today) { ((today.year - 5)..(today.year + 1)).toList() }
+    val lengthOptions = remember { (2..10).toList() }
+
+    var yearIndex by remember { mutableStateOf(years.indexOf(today.year).coerceAtLeast(0)) }
+    var monthIndex by remember { mutableStateOf(today.monthValue - 1) }
+    var dayIndex by remember { mutableStateOf(today.dayOfMonth - 1) }
+    var lengthIndex by remember {
+        mutableStateOf(lengthOptions.indexOf(defaultLength).takeIf { it >= 0 } ?: 4)
+    }
+
+    val year = years[yearIndex]
+    val month = monthIndex + 1
+    val daysInMonth = remember(year, month) { YearMonth.of(year, month).lengthOfMonth() }
+    val day = (dayIndex + 1).coerceIn(1, daysInMonth)
+    val length = lengthOptions[lengthIndex.coerceIn(0, lengthOptions.lastIndex)]
+
+    fun jumpTo(date: LocalDate) {
+        years.indexOf(date.year).takeIf { it >= 0 }?.let { yearIndex = it }
+        monthIndex = date.monthValue - 1
+        dayIndex = date.dayOfMonth - 1
+    }
+
+    // Keep the day wheel inside the chosen month.
+    LaunchedEffect(year, month) {
+        if (dayIndex > daysInMonth - 1) dayIndex = daysInMonth - 1
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("记录经期") },
         text = {
-            Column {
-                OutlinedTextField(
-                    value = dateText,
-                    onValueChange = { dateText = it },
-                    label = { Text("开始日期 YYYY-MM-DD") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = { jumpTo(today) }) { Text("今天") }
+                    TextButton(onClick = { jumpTo(today.minusDays(1)) }) { Text("昨天") }
+                }
+
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    WheelPicker(
+                        items = years.map { it.toString() },
+                        selectedIndex = yearIndex,
+                        onSelected = { yearIndex = it },
+                        modifier = Modifier.weight(1.3f)
+                    )
+                    WheelPicker(
+                        items = (1..12).map { it.toString() },
+                        selectedIndex = monthIndex,
+                        onSelected = { monthIndex = it },
+                        modifier = Modifier.weight(1f)
+                    )
+                    WheelPicker(
+                        items = (1..daysInMonth).map { it.toString() },
+                        selectedIndex = (dayIndex).coerceIn(0, daysInMonth - 1),
+                        onSelected = { dayIndex = it },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "经期持续",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = lengthText,
-                    onValueChange = { lengthText = it.filter(Char::isDigit) },
-                    label = { Text("持续天数 (2-10)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                WheelPicker(
+                    items = lengthOptions.map { "$it 天" },
+                    selectedIndex = lengthIndex,
+                    onSelected = { lengthIndex = it },
+                    modifier = Modifier.fillMaxWidth(0.55f),
+                    itemHeight = 32.dp,
+                    visibleCount = 3
+                )
+
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "$year年$month月$day日 · 持续 $length 天",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
         },
         confirmButton = {
             TextButton(onClick = {
-                val date = parseIso(dateText.trim())
-                val length = lengthText.toIntOrNull()
-                if (date != null && length != null && length in 2..10) {
-                    onConfirm(dateText.trim(), length)
-                }
+                onConfirm(LocalDate.of(year, month, day).toString(), length)
             }) { Text("保存") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
