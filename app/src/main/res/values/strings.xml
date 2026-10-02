@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">经期助手</string>
-    <string name="widget_label">经期小组件</string>
+    <string name="widget_label_2x2">经期小组件 2×2</string>
+    <string name="widget_label_2x1">经期小组件 2×1</string>
     <string name="widget_description">桌面显示今日状态、周期预测与下次经期</string>
 
     <string name="widget_cycle_info">周期 %1$d 天 · 经期 %2$d 天</string>

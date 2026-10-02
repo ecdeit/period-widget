@@ -1,11 +1,8 @@
 package com.example.periodwidget
 
-import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
-import android.widget.RemoteViews
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
@@ -18,8 +15,8 @@ import java.time.LocalDate
 /**
  * Reads the database off the main thread and re-renders every placed widget.
  *
- * The provider itself cannot do this: onUpdate runs on the main thread, so a
- * database read there would block the UI. WorkManager is the supported place.
+ * Both widget sizes are handled here because they share one data read; each
+ * component gets the layout that matches its size.
  */
 class WidgetUpdateWorker(
     context: Context,
@@ -31,18 +28,20 @@ class WidgetUpdateWorker(
             val app = applicationContext as PeriodWidgetApplication
             val periods = app.store.all()
             val stats = CycleCalculator.computeStats(periods)
-            val status = CycleCalculator.getDayStatus(LocalDate.now(), periods, stats).status
+            val today = LocalDate.now()
+            val kind = CycleCalculator.getDayStatus(today, periods, stats).kind
             val todayStatus = CycleCalculator.describeToday(periods, stats)
 
             val manager = AppWidgetManager.getInstance(applicationContext)
-            val ids = manager.getAppWidgetIds(
-                ComponentName(applicationContext, PeriodWidgetProvider::class.java)
-            )
-            for (id in ids) {
-                manager.updateAppWidget(
-                    id,
-                    buildViews(applicationContext, id, stats, status, todayStatus)
-                )
+            for (target in targets(applicationContext)) {
+                for (id in manager.getAppWidgetIds(target.component)) {
+                    manager.updateAppWidget(
+                        id,
+                        WidgetRenderer.render(
+                            applicationContext, id, target.compact, stats, kind, todayStatus
+                        )
+                    )
+                }
             }
             Result.success()
         } catch (t: Throwable) {
@@ -50,61 +49,14 @@ class WidgetUpdateWorker(
         }
     }
 
-    private fun buildViews(
-        context: Context,
-        appWidgetId: Int,
-        stats: CycleStats,
-        status: DayStatus.DayStatusType,
-        todayStatus: String
-    ): RemoteViews {
-        val views = RemoteViews(context.packageName, R.layout.widget_layout)
+    private data class Target(val component: ComponentName, val compact: Boolean)
 
-        views.setTextViewText(R.id.tv_today_status, todayStatus)
-        views.setTextViewText(
-            R.id.tv_cycle_info,
-            context.getString(R.string.widget_cycle_info, stats.cycleLength, stats.periodLength)
-        )
-        views.setTextViewText(
-            R.id.tv_next_period,
-            stats.nextPredicted?.let { context.getString(R.string.widget_next_period, it) }
-                ?: context.getString(R.string.widget_no_prediction)
-        )
-
-        val look = WidgetStyle.forStatus(status)
-        views.setImageViewResource(R.id.iv_status_icon, look.icon)
-        // setTextColor takes an ARGB int, so the resource id must be resolved.
-        views.setTextColor(R.id.tv_today_status, context.getColor(look.colorRes))
-
-        // Tap anywhere on the widget body to open the app.
-        views.setOnClickPendingIntent(R.id.widget_root, openAppIntent(context, appWidgetId))
-
-        // The quick-add chip jumps straight to the add dialog.
-        views.setOnClickPendingIntent(
-            R.id.btn_add_period,
-            openAppIntent(context, appWidgetId + ADD_REQUEST_OFFSET, PeriodWidgetProvider.EXTRA_OPEN_ADD)
-        )
-        return views
-    }
-
-    private fun openAppIntent(
-        context: Context,
-        requestCode: Int,
-        extra: String? = null
-    ): PendingIntent {
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            if (extra != null) putExtra(extra, true)
-        }
-        return PendingIntent.getActivity(
-            context,
-            requestCode,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-    }
+    private fun targets(context: Context): List<Target> = listOf(
+        Target(ComponentName(context, PeriodWidgetProvider::class.java), compact = false),
+        Target(ComponentName(context, PeriodWidgetSmallProvider::class.java), compact = true)
+    )
 
     companion object {
-        private const val ADD_REQUEST_OFFSET = 1000
         private const val ONE_SHOT_NAME = "period_widget_update_now"
 
         /** Replace any pending one-shot so rapid saves do not queue up workers. */
@@ -114,6 +66,16 @@ class WidgetUpdateWorker(
                 ExistingWorkPolicy.REPLACE,
                 OneTimeWorkRequestBuilder<WidgetUpdateWorker>().build()
             )
+        }
+
+        /** True while at least one widget of either size is on the home screen. */
+        fun anyWidgetPlaced(context: Context): Boolean {
+            val manager = AppWidgetManager.getInstance(context)
+            val components = listOf(
+                ComponentName(context, PeriodWidgetProvider::class.java),
+                ComponentName(context, PeriodWidgetSmallProvider::class.java)
+            )
+            return components.any { manager.getAppWidgetIds(it).isNotEmpty() }
         }
     }
 }

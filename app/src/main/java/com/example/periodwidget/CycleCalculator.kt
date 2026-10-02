@@ -9,23 +9,28 @@ import kotlin.math.roundToInt
 data class CycleStats(
     val cycleLength: Int = 28,
     val periodLength: Int = 5,
-    val lastPeriodStart: String? = null,      // YYYY-MM-DD
-    val nextPredicted: String? = null,        // YYYY-MM-DD
-    val ovulationDay: String? = null,         // YYYY-MM-DD
-    val fertileWindowStart: String? = null,   // YYYY-MM-DD
-    val fertileWindowEnd: String? = null      // YYYY-MM-DD
+    val lastPeriodStart: String? = null,      // ISO date
+    val nextPredicted: String? = null,        // ISO date
+    val ovulationDay: String? = null,         // ISO date
+    val fertileWindowStart: String? = null,   // ISO date
+    val fertileWindowEnd: String? = null      // ISO date
 )
 
+/**
+ * What kind of day a calendar cell is.
+ *
+ * "Today" is deliberately not a kind: a day can be today *and* a period day, so
+ * today is a flag on [DayStatus] that draws a ring around whatever fill applies.
+ * The same applies to past/future, which carried no visual meaning.
+ */
+enum class DayKind { PERIOD, PREDICTED_PERIOD, OVULATION, FERTILE, ORDINARY }
+
 data class DayStatus(
-    val date: String,                         // YYYY-MM-DD
-    val status: DayStatusType,
-    val isToday: Boolean = false,
+    val date: String,
+    val kind: DayKind,
+    val isToday: Boolean,
     val dayOfMonth: Int
-) {
-    enum class DayStatusType {
-        PERIOD, OVULATION, FERTILE, NEXT_PERIOD, TODAY, PAST, FUTURE
-    }
-}
+)
 
 object CycleCalculator {
 
@@ -34,12 +39,19 @@ object CycleCalculator {
     private const val OVULATION_OFFSET = 14
     private const val FERTILE_START_OFFSET = 5
     private const val FERTILE_END_OFFSET = 1
+    private const val MIN_PLAUSIBLE_CYCLE = 21
+    private const val MAX_PLAUSIBLE_CYCLE = 45
+    private const val MIN_PLAUSIBLE_PERIOD = 2
+    private const val MAX_PLAUSIBLE_PERIOD = 10
 
     private val formatter = DateTimeFormatter.ISO_LOCAL_DATE
 
-    fun parseDate(str: String?): LocalDate? {
-        return try { str?.let { LocalDate.parse(it, formatter) } } catch (e: Exception) { null }
-    }
+    fun parseDate(str: String?): LocalDate? =
+        try {
+            str?.let { LocalDate.parse(it, formatter) }
+        } catch (e: Exception) {
+            null
+        }
 
     fun formatDate(date: LocalDate?): String? = date?.format(formatter)
 
@@ -49,15 +61,11 @@ object CycleCalculator {
     }
 
     fun computeStats(periods: List<PeriodEntity>): CycleStats {
-        if (periods.isEmpty()) {
-            return CycleStats()
-        }
+        if (periods.isEmpty()) return CycleStats()
 
-        val sorted = periods.sortedBy { parseDate(it.startDate)!! }
-        val last = sorted.last()
-        val lastStart = parseDate(last.startDate)!!
+        val sorted = periods.sortedBy { parseDate(it.startDate) ?: LocalDate.MIN }
+        val lastStart = parseDate(sorted.last().startDate) ?: return CycleStats()
 
-        // 计算平均周期长度
         val cycleLengths = mutableListOf<Int>()
         val periodLengths = mutableListOf<Int>()
 
@@ -66,116 +74,138 @@ object CycleCalculator {
             val curr = parseDate(sorted[i].startDate)
             if (prev != null && curr != null) {
                 val diff = daysBetween(prev, curr)
-                if (diff in 21..45) cycleLengths.add(diff)
+                if (diff in MIN_PLAUSIBLE_CYCLE..MAX_PLAUSIBLE_CYCLE) cycleLengths.add(diff)
             }
-            val plen = sorted[i - 1].length
-            if (plen in 2..10) periodLengths.add(plen)
+            sorted[i - 1].length
+                .takeIf { it in MIN_PLAUSIBLE_PERIOD..MAX_PLAUSIBLE_PERIOD }
+                ?.let { periodLengths.add(it) }
         }
-        // 最后一期的经期长度也加入
-        val lastLen = last.length
-        if (lastLen in 2..10) periodLengths.add(lastLen)
+        sorted.last().length
+            .takeIf { it in MIN_PLAUSIBLE_PERIOD..MAX_PLAUSIBLE_PERIOD }
+            ?.let { periodLengths.add(it) }
 
-        val avgCycle = if (cycleLengths.isNotEmpty()) cycleLengths.average().roundToInt() else DEFAULT_CYCLE
-        val avgPeriod = if (periodLengths.isNotEmpty()) periodLengths.average().roundToInt() else DEFAULT_PERIOD
+        val avgCycle = if (cycleLengths.isNotEmpty()) {
+            cycleLengths.average().roundToInt()
+        } else DEFAULT_CYCLE
+        val avgPeriod = if (periodLengths.isNotEmpty()) {
+            periodLengths.average().roundToInt()
+        } else DEFAULT_PERIOD
 
-        val nextStart = lastStart.plusDays(avgCycle.toLong())
         val ovulation = lastStart.plusDays((avgCycle - OVULATION_OFFSET).toLong())
-        val fertileStart = ovulation.minusDays(FERTILE_START_OFFSET.toLong())
-        val fertileEnd = ovulation.plusDays(FERTILE_END_OFFSET.toLong())
 
         return CycleStats(
             cycleLength = avgCycle,
             periodLength = avgPeriod,
             lastPeriodStart = formatDate(lastStart),
-            nextPredicted = formatDate(nextStart),
+            nextPredicted = formatDate(lastStart.plusDays(avgCycle.toLong())),
             ovulationDay = formatDate(ovulation),
-            fertileWindowStart = formatDate(fertileStart),
-            fertileWindowEnd = formatDate(fertileEnd)
+            fertileWindowStart = formatDate(ovulation.minusDays(FERTILE_START_OFFSET.toLong())),
+            fertileWindowEnd = formatDate(ovulation.plusDays(FERTILE_END_OFFSET.toLong()))
         )
     }
 
-    fun getDayStatus(date: LocalDate, periods: List<PeriodEntity>, stats: CycleStats): DayStatus {
-        val today = LocalDate.now()
-        val isToday = date == today
-
-        val periodStart = parseDate(stats.lastPeriodStart)
-        val periodEnd = periodStart?.plusDays((stats.periodLength - 1).toLong())
-        val nextStart = parseDate(stats.nextPredicted)
-        val ovulation = parseDate(stats.ovulationDay)
-        val fertileStart = parseDate(stats.fertileWindowStart)
-        val fertileEnd = parseDate(stats.fertileWindowEnd)
-
-        val inPeriod = periodStart != null && periodEnd != null && date in periodStart..periodEnd
-        val inFertile = fertileStart != null && fertileEnd != null && date in fertileStart..fertileEnd
-        val isOvulation = ovulation != null && date == ovulation
-        val isNextPeriod = nextStart != null && date == nextStart
-
-        val status = when {
-            inPeriod -> DayStatus.DayStatusType.PERIOD
-            isOvulation -> DayStatus.DayStatusType.OVULATION
-            inFertile -> DayStatus.DayStatusType.FERTILE
-            isNextPeriod -> DayStatus.DayStatusType.NEXT_PERIOD
-            isToday -> DayStatus.DayStatusType.TODAY
-            date < today -> DayStatus.DayStatusType.PAST
-            else -> DayStatus.DayStatusType.FUTURE
+    /** The recorded period covering [date], if any. */
+    private fun coveringPeriod(date: LocalDate, periods: List<PeriodEntity>): PeriodEntity? =
+        periods.firstOrNull { p ->
+            val start = parseDate(p.startDate) ?: return@firstOrNull false
+            val end = start.plusDays((p.length - 1).toLong())
+            !date.isBefore(start) && !date.isAfter(end)
         }
 
-        return DayStatus(
-            date = formatDate(date)!!,
-            status = status,
-            isToday = isToday,
-            dayOfMonth = date.dayOfMonth
-        )
+    /**
+     * Classify one day.
+     *
+     * Every recorded period is checked, not just the most recent one, so earlier
+     * months show their real period days. Precedence follows what the day means
+     * clinically: a recorded period outranks everything, then the single
+     * ovulation day, then the fertile window, then the predicted period.
+     */
+    private fun classify(date: LocalDate, periods: List<PeriodEntity>, stats: CycleStats): DayKind {
+        if (coveringPeriod(date, periods) != null) return DayKind.PERIOD
+
+        val ovulation = parseDate(stats.ovulationDay)
+        if (ovulation != null && date == ovulation) return DayKind.OVULATION
+
+        val fertileStart = parseDate(stats.fertileWindowStart)
+        val fertileEnd = parseDate(stats.fertileWindowEnd)
+        if (fertileStart != null && fertileEnd != null &&
+            !date.isBefore(fertileStart) && !date.isAfter(fertileEnd)
+        ) {
+            return DayKind.FERTILE
+        }
+
+        val nextStart = parseDate(stats.nextPredicted)
+        if (nextStart != null) {
+            val predictedEnd = nextStart.plusDays((stats.periodLength - 1).toLong())
+            if (!date.isBefore(nextStart) && !date.isAfter(predictedEnd)) {
+                return DayKind.PREDICTED_PERIOD
+            }
+        }
+
+        return DayKind.ORDINARY
     }
 
-    fun generateCalendarMatrix(year: Int, month: Int, periods: List<PeriodEntity>, stats: CycleStats): List<List<DayStatus?>> {
+    fun getDayStatus(date: LocalDate, periods: List<PeriodEntity>, stats: CycleStats): DayStatus =
+        DayStatus(
+            date = formatDate(date)!!,
+            kind = classify(date, periods, stats),
+            isToday = date == LocalDate.now(),
+            dayOfMonth = date.dayOfMonth
+        )
+
+    fun generateCalendarMatrix(
+        year: Int,
+        month: Int,
+        periods: List<PeriodEntity>,
+        stats: CycleStats
+    ): List<List<DayStatus?>> {
         val firstDay = LocalDate.of(year, month, 1)
-        val lastDay = firstDay.plusMonths(1).minusDays(1)
-        val startOffset = firstDay.dayOfWeek.value % 7 // 0=Sunday
-        val daysInMonth = lastDay.dayOfMonth
+        val daysInMonth = firstDay.lengthOfMonth()
+        val startOffset = firstDay.dayOfWeek.value % 7  // 0 = Sunday
 
         val matrix = mutableListOf<List<DayStatus?>>()
         var week = mutableListOf<DayStatus?>()
 
-        // 前置空白
         repeat(startOffset) { week.add(null) }
 
         for (day in 1..daysInMonth) {
-            val date = LocalDate.of(year, month, day)
-            val dayStatus = getDayStatus(date, periods, stats)
-            week.add(dayStatus)
+            week.add(getDayStatus(LocalDate.of(year, month, day), periods, stats))
             if (week.size == 7) {
                 matrix.add(week)
                 week = mutableListOf()
             }
         }
-
         if (week.isNotEmpty()) {
             while (week.size < 7) week.add(null)
             matrix.add(week)
         }
-
         return matrix
     }
 
+    /** One-line description of today, used by both the widget and the app header. */
     fun describeToday(periods: List<PeriodEntity>, stats: CycleStats): String {
         val today = LocalDate.now()
-        val dayStatus = getDayStatus(today, periods, stats)
-        return when (dayStatus.status) {
-            DayStatus.DayStatusType.PERIOD -> "经期中 🩸 第 ${daysBetween(parseDate(stats.lastPeriodStart), today) + 1} 天"
-            DayStatus.DayStatusType.OVULATION -> "排卵日 🥚 易孕期高峰"
-            DayStatus.DayStatusType.FERTILE -> {
-                val ov = parseDate(stats.ovulationDay)
-                val daysToOv = ov?.let { daysBetween(today, it) } ?: 0
-                if (daysToOv > 0) "易孕期 🌸 距排卵 $daysToOv 天" else "易孕期 🌸 排卵期结束"
+        return when (classify(today, periods, stats)) {
+            DayKind.PERIOD -> {
+                val start = coveringPeriod(today, periods)?.let { parseDate(it.startDate) }
+                val dayIndex = daysBetween(start, today) + 1
+                "经期中 · 第 $dayIndex 天"
             }
-            DayStatus.DayStatusType.NEXT_PERIOD -> "下次经期预计今天 📅"
-            DayStatus.DayStatusType.TODAY -> {
+            DayKind.OVULATION -> "排卵日 · 易孕期高峰"
+            DayKind.FERTILE -> {
+                val ovulation = parseDate(stats.ovulationDay)
+                val daysToOvulation = ovulation?.let { daysBetween(today, it) } ?: 0
+                if (daysToOvulation > 0) "易孕期 · 距排卵 $daysToOvulation 天" else "易孕期 · 即将结束"
+            }
+            DayKind.PREDICTED_PERIOD -> "预计经期"
+            DayKind.ORDINARY -> {
                 val next = parseDate(stats.nextPredicted)
-                val daysLeft = next?.let { daysBetween(today, it) } ?: 0
-                if (daysLeft > 0) "距下次经期 $daysLeft 天" else "周期正常"
+                when {
+                    next == null -> "暂无数据，请记录经期"
+                    daysBetween(today, next) > 0 -> "距下次经期 ${daysBetween(today, next)} 天"
+                    else -> "周期正常"
+                }
             }
-            else -> "暂无数据，请记录经期"
         }
     }
 }

@@ -6,12 +6,24 @@
 
 | 功能 | 说明 |
 |------|------|
-| 桌面小组件 | 今日状态、周期长度、下次经期；点「＋记录」直接跳转录入 |
+| 桌面小组件 | **2×2** 与 **2×1** 两种尺寸，各自独立可选；点「＋记录」直接跳转录入 |
 | 智能预测 | 按历史记录算平均周期，预测下次经期、排卵日、易孕窗口 |
-| 日历视图 | 月历标记经期/排卵/易孕/下次经期，可翻月 |
-| 历史记录 | 增删记录，显示每次持续天数 |
-| 自动刷新 | WorkManager 每 30 分钟刷新；开机后自动恢复 |
+| 日历视图 | 月历按参考配色标记：经期／预测经期／排卵期／排卵日，今天为金色圆环 |
+| 历史记录 | 增删记录，**所有**历史经期都会在日历上标出 |
+| 自动刷新 | WorkManager 每 30 分钟刷新；开机自动恢复 |
 | 隐私 | 无网络权限，数据仅存本机 SQLite |
+
+## 日历配色
+
+| 标记 | 颜色 |
+|------|------|
+| 经期 | 暖橘实心圆 + 白字 |
+| 预测经期 | 浅粉圆 + 深粉字 |
+| 排卵期 | 天蓝圆 + 白字 |
+| 排卵日 | 淡紫圆 + 深紫字 |
+| 今天 | 金色圆环（**叠加**在当天标记之上，不覆盖） |
+
+「今天」是圆环而非填充，所以「今天是经期第 3 天」能同时表达两件事。
 
 ## 预测逻辑
 
@@ -47,12 +59,14 @@ period-widget-native/
 ├── .github/workflows/build.yml     CI：编译并上传 APK
 ├── app/src/main/
 │   ├── java/com/example/periodwidget/
-│   │   ├── CycleCalculator.kt      预测算法（纯函数，可单测）
+│   │   ├── CycleCalculator.kt      预测算法 + 每日归类（纯函数，可单测）
+│   │   ├── CalendarPalette.kt      日历配色（App 与小组件共用）
 │   │   ├── PeriodEntity.kt         记录数据类
 │   │   ├── PeriodStore.kt          SQLite 存储
 │   │   ├── PeriodRepository.kt     数据访问 + ViewModel
-│   │   ├── PeriodWidgetProvider.kt 小组件宿主回调
-│   │   ├── WidgetUpdateWorker.kt   后台读取并渲染小组件
+│   │   ├── PeriodWidgetProvider.kt 两种尺寸的宿主回调
+│   │   ├── WidgetRenderer.kt       按尺寸渲染 RemoteViews
+│   │   ├── WidgetUpdateWorker.kt   后台读取并刷新两种小组件
 │   │   ├── WidgetStyle.kt          状态 → 图标/颜色映射
 │   │   ├── BootReceiver.kt         开机恢复刷新任务
 │   │   └── MainActivity.kt         Compose 记录界面

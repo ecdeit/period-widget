@@ -68,7 +68,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        openAddOnStart.value = intent.getBooleanExtra(PeriodWidgetProvider.EXTRA_OPEN_ADD, false)
+        openAddOnStart.value = intent.getBooleanExtra(WIDGET_EXTRA_OPEN_ADD, false)
 
         setContent {
             MaterialTheme {
@@ -85,7 +85,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
-        if (intent.getBooleanExtra(PeriodWidgetProvider.EXTRA_OPEN_ADD, false)) {
+        if (intent.getBooleanExtra(WIDGET_EXTRA_OPEN_ADD, false)) {
             openAddOnStart.value = true
         }
         // The widget may have gone stale while the app was closed.
@@ -165,11 +165,11 @@ private fun PeriodScreen(
 @Composable
 private fun TodayCard(status: String) {
     val color = when {
-        status.contains("经期中") -> Color(0xFFC2185B)
-        status.contains("排卵") -> Color(0xFFE65100)
-        status.contains("易孕") -> Color(0xFFAD1457)
-        status.contains("预计今天") -> Color(0xFF1565C0)
-        else -> Color(0xFF2E7D32)
+        status.contains("经期中") -> Color(0xFFE2725B)
+        status.contains("排卵") -> Color(0xFF6B4E9E)
+        status.contains("易孕") -> Color(0xFF2E8BB0)
+        status.contains("预计经期") -> Color(0xFFB3555A)
+        else -> Color(0xFFB08D3F)
     }
     Card(
         Modifier.fillMaxWidth(),
@@ -219,13 +219,13 @@ private fun PredictionsCard(stats: CycleStats) {
         Column(Modifier.padding(16.dp)) {
             Text("预测", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(10.dp))
-            PredictionLine("排卵日", stats.ovulationDay, Color(0xFFE65100)) { daysLabel(stats.ovulationDay) }
+            PredictionLine("排卵日", stats.ovulationDay, Color(0xFF6B4E9E)) { daysLabel(stats.ovulationDay) }
             PredictionLine(
                 "易孕期",
-                stats.fertileWindowEnd?.takeLast(5),
-                Color(0xFFAD1457)
+                stats.fertileWindowStart,
+                Color(0xFF2E8BB0)
             ) { fertileLabel(stats) }
-            PredictionLine("下次经期", stats.nextPredicted, Color(0xFF1565C0)) { "预计周期第 1 天" }
+            PredictionLine("下次经期", stats.nextPredicted, Color(0xFFB3555A)) { "预计周期第 1 天" }
         }
     }
 }
@@ -247,9 +247,12 @@ private fun fertileLabel(stats: CycleStats): String {
     val start = parseIso(stats.fertileWindowStart) ?: return ""
     val end = parseIso(stats.fertileWindowEnd) ?: return ""
     val today = LocalDate.now()
+    // The value column shows the start date, so this must speak about the start,
+    // and it names the end date so the window is unambiguous.
     return when {
-        today.isBefore(start) -> "还有 ${ChronoUnit.DAYS.between(today, start)} 天开始"
-        !today.isAfter(end) -> "易孕期中"
+        today.isBefore(start) ->
+            "还有 ${ChronoUnit.DAYS.between(today, start)} 天开始 · 到 ${end.monthValue}月${end.dayOfMonth}日"
+        !today.isAfter(end) -> "易孕期中 · 到 ${end.monthValue}月${end.dayOfMonth}日"
         else -> "已结束"
     }
 }
@@ -315,47 +318,74 @@ private fun CalendarCard(today: LocalDate, periods: List<PeriodEntity>, stats: C
             matrix.forEach { week ->
                 Row(Modifier.fillMaxWidth()) { week.forEach { DayCell(it) } }
             }
+            CalendarLegend()
         }
     }
 }
 
-/**
- * One calendar cell. Declared on RowScope because `Modifier.weight` is only
- * available inside a Row/Column scope, and the seven cells share the row width.
- */
 @Composable
 private fun RowScope.DayCell(day: DayStatus?) {
     if (day == null) {
-        Box(Modifier.weight(1f).height(44.dp))
+        Box(Modifier.weight(1f).height(46.dp))
         return
     }
-    val bg: Color
-    val fg: Color
-    when (day.status) {
-        DayStatus.DayStatusType.PERIOD -> { bg = Color(0xFFFCE4EC); fg = Color(0xFFC2185B) }
-        DayStatus.DayStatusType.OVULATION -> { bg = Color(0xFFFFF3E0); fg = Color(0xFFE65100) }
-        DayStatus.DayStatusType.FERTILE -> { bg = Color(0xFFFCECEF); fg = Color(0xFFAD1457) }
-        DayStatus.DayStatusType.NEXT_PERIOD -> { bg = Color(0xFFE3F2FD); fg = Color(0xFF1565C0) }
-        DayStatus.DayStatusType.TODAY -> { bg = Color(0xFFE8F5E9); fg = Color(0xFF2E7D32) }
-        else -> { bg = Color.Transparent; fg = MaterialTheme.colorScheme.onSurface }
-    }
-    val marked = day.status != DayStatus.DayStatusType.PAST && day.status != DayStatus.DayStatusType.FUTURE
+    val cell = CalendarPalette.cellFor(day.kind)
+    val marked = day.kind != DayKind.ORDINARY
 
     Box(
         Modifier
             .weight(1f)
-            .height(44.dp)
+            .height(46.dp)
             .padding(2.dp)
-            .background(bg, CircleShape)
-            .then(if (marked) Modifier.border(1.dp, fg, CircleShape) else Modifier),
+            .then(if (marked) Modifier.background(cell.fill, CircleShape) else Modifier)
+            // Today is a ring, not a fill, so it composes with the day's kind.
+            .then(
+                if (day.isToday) Modifier.border(2.dp, CalendarPalette.todayRing, CircleShape)
+                else Modifier
+            ),
         contentAlignment = Alignment.Center
     ) {
         Text(
             "${day.dayOfMonth}",
             fontSize = 13.sp,
-            fontWeight = if (day.status == DayStatus.DayStatusType.TODAY) FontWeight.Bold else FontWeight.Normal,
-            color = fg
+            fontWeight = if (day.isToday) FontWeight.Bold else FontWeight.Normal,
+            color = when {
+                marked -> cell.content
+                day.isToday -> CalendarPalette.todayRing
+                else -> MaterialTheme.colorScheme.onSurface
+            }
         )
+    }
+}
+
+/** Colour key for the calendar, matching the reference tracker's legend. */
+@Composable
+private fun CalendarLegend() {
+    val items = listOf(
+        "经期" to DayKind.PERIOD,
+        "预测经期" to DayKind.PREDICTED_PERIOD,
+        "排卵期" to DayKind.FERTILE,
+        "排卵日" to DayKind.OVULATION
+    )
+    Row(
+        Modifier.fillMaxWidth().padding(top = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items.forEach { (label, kind) ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .size(10.dp)
+                        .background(CalendarPalette.cellFor(kind).fill, CircleShape)
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    label,
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 

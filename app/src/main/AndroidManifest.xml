@@ -28,11 +28,11 @@
             </intent-filter>
         </activity>
 
-        <!-- Desktop widget host -->
+        <!-- Desktop widgets: 2x2 and 2x1 -->
         <receiver
             android:name=".PeriodWidgetProvider"
             android:exported="true"
-            android:label="@string/widget_label"
+            android:label="@string/widget_label_2x2"
             android:icon="@drawable/ic_period"
             android:previewImage="@drawable/widget_preview">
             <intent-filter>
@@ -44,6 +44,23 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".PeriodWidgetSmallProvider"
+            android:exported="true"
+            android:label="@string/widget_label_2x1"
+            android:icon="@drawable/ic_period"
+            android:previewImage="@drawable/widget_preview">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.appwidget.action.APPWIDGET_ENABLED" />
+                <action android:name="android.appwidget.action.APPWIDGET_DISABLED" />
+                <action android:name="android.appwidget.action.APPWIDGET_OPTIONS_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info_small" />
         </receiver>
 
         <receiver

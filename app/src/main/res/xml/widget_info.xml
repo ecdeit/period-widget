@@ -1,18 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  updatePeriodMillis is 0 on purpose: the refresh cadence is owned by
-  WorkManager, which survives reboots and respects Doze. The system's
-  updatePeriodMillis path is neither reliable nor needed here.
+  2x2 widget. minWidth/minHeight follow the platform cell formula
+  (70dp * cells - 30dp), so 110dp is 2 cells in both directions.
+  targetCell* pins the exact size on API 31+; updatePeriodMillis is 0 because the
+  refresh cadence belongs to WorkManager, which survives reboots and respects Doze.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:initialLayout="@layout/widget_layout"
-    android:minWidth="180dp"
+    android:minWidth="110dp"
     android:minHeight="110dp"
-    android:minResizeWidth="150dp"
-    android:minResizeHeight="70dp"
-    android:maxResizeWidth="400dp"
-    android:maxResizeHeight="300dp"
-    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
+    android:resizeMode="none"
     android:updatePeriodMillis="0"
     android:previewImage="@drawable/widget_preview"
     android:widgetCategory="home_screen"

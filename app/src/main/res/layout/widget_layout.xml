@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Widget layout. RemoteViews supports only a fixed set of views and attributes,
-  so this stays plain LinearLayout/TextView/ImageView with no data binding.
+  2x2 widget: status, cycle summary, next period, and a quick-add chip.
+  RemoteViews supports only a fixed view set, so this stays plain
+  LinearLayout/TextView/ImageView with no data binding.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
@@ -57,7 +58,7 @@
         android:text="@string/widget_loading"
         android:textSize="12sp"
         android:textStyle="bold"
-        android:textColor="@color/next_blue"
+        android:textColor="@color/cal_predicted_on"
         android:maxLines="1"
         android:ellipsize="end" />
 
