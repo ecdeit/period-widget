@@ -24,6 +24,7 @@
 
     <!-- Background colors -->
     <color name="widget_bg">#FAFAFA</color>
+    <color name="widget_stroke">#E0E0E0</color>
     <color name="card_bg">#FFFFFF</color>
     <color name="surface_container">#F5F5F5</color>
 

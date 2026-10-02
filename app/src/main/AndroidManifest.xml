@@ -2,11 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- 权限 -->
+    <!-- Re-arm the refresh worker after a reboot or an app update. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".PeriodWidgetApplication"
@@ -15,17 +12,15 @@
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:theme="@style/Theme.PeriodWidget"
         tools:targetApi="31">
 
-        <!-- 主 Activity -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
-            android:theme="@style/Theme.PeriodWidget"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -33,12 +28,12 @@
             </intent-filter>
         </activity>
 
-        <!-- 小组件 Provider -->
+        <!-- Desktop widget host -->
         <receiver
             android:name=".PeriodWidgetProvider"
             android:exported="true"
-            android:label="@string/widget_name"
-            android:icon="@drawable/ic_widget"
+            android:label="@string/widget_label"
+            android:icon="@drawable/ic_period"
             android:previewImage="@drawable/widget_preview">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -51,17 +46,9 @@
                 android:resource="@xml/widget_info" />
         </receiver>
 
-        <!-- 更新 Service -->
-        <service
-            android:name=".WidgetUpdateService"
-            android:exported="false"
-            android:permission="android.permission.BIND_JOB_SERVICE" />
-
-        <!-- 启动完成广播 -->
         <receiver
             android:name=".BootReceiver"
-            android:exported="true"
-            android:enabled="true">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />

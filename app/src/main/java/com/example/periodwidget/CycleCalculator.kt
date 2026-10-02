@@ -2,7 +2,9 @@ package com.example.periodwidget
 
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import java.util.*
+import java.time.temporal.ChronoUnit
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 data class CycleStats(
     val cycleLength: Int = 28,
@@ -43,7 +45,7 @@ object CycleCalculator {
 
     fun daysBetween(a: LocalDate?, b: LocalDate?): Int {
         if (a == null || b == null) return 0
-        return Math.abs(ChronoUnit.DAYS.between(a, b)).toInt()
+        return abs(ChronoUnit.DAYS.between(a, b)).toInt()
     }
 
     fun addDays(date: LocalDate?, days: Int): LocalDate? = date?.plusDays(days)
@@ -158,7 +160,7 @@ object CycleCalculator {
         return matrix
     }
 
-    fun getTodayStatus(periods: List<PeriodEntity>, stats: CycleStats): String {
+    fun describeToday(periods: List<PeriodEntity>, stats: CycleStats): String {
         val today = LocalDate.now()
         val dayStatus = getDayStatus(today, periods, stats)
         return when (dayStatus.status) {

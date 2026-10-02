@@ -5,21 +5,20 @@ import androidx.room.Room
 
 class PeriodWidgetApplication : Application() {
 
-    private var _database: PeriodDatabase? = null
-    val database: PeriodDatabase
-        get() {
-            if (_database == null) {
-                _database = Room.databaseBuilder(
-                    this,
-                    PeriodDatabase::class.java,
-                    "period_db"
-                ).fallbackToDestructiveMigration().build()
-            }
-            return _database!!
-        }
+    @Volatile
+    private var instance: PeriodDatabase? = null
 
-    override fun onTerminate() {
-        _database?.close()
-        super.onTerminate()
-    }
+    /**
+     * Lazily built and cached. Room's own builder is already thread-safe, but the
+     * reference is cached here so the widget worker and the UI never race to
+     * open the same file twice.
+     */
+    val database: PeriodDatabase
+        get() = instance ?: synchronized(this) {
+            instance ?: Room.databaseBuilder(
+                applicationContext,
+                PeriodDatabase::class.java,
+                "period_db"
+            ).fallbackToDestructiveMigration().build().also { instance = it }
+        }
 }

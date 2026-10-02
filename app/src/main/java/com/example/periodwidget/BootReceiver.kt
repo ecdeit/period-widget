@@ -8,22 +8,29 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import java.util.concurrent.TimeUnit
 
+/** WorkManager keeps its schedule across reboots, but the widget's first paint does not. */
 class BootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED -> {
-                // 重新调度小组件更新工作
-                val workRequest = PeriodicWorkRequestBuilder<WidgetUpdateService>(15, TimeUnit.MINUTES)
-                    .setInitialDelay(1, TimeUnit.MINUTES)
-                    .build()
+                WidgetUpdateWorker.enqueueNow(context)
+
+                val request = PeriodicWorkRequestBuilder<WidgetUpdateWorker>(
+                    REFRESH_INTERVAL_MINUTES, TimeUnit.MINUTES
+                ).build()
                 WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                    PeriodWidgetProvider.WORK_NAME,
+                    WORK_NAME,
                     ExistingPeriodicWorkPolicy.KEEP,
-                    workRequest
+                    request
                 )
             }
         }
+    }
+
+    private companion object {
+        const val WORK_NAME = "period_widget_periodic_refresh"
+        const val REFRESH_INTERVAL_MINUTES = 30L
     }
 }

@@ -1,79 +1,79 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Widget layout. RemoteViews supports only a fixed set of views and attributes,
+  so this stays plain LinearLayout/TextView/ImageView with no data binding.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:padding="12dp"
-    android:background="@color/widget_bg"
-    android:gravity="center_vertical">
+    android:background="@drawable/widget_background">
 
-    <!-- 状态图标 + 今日状态 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginBottom="8dp">
+        android:gravity="center_vertical">
 
         <ImageView
             android:id="@+id/iv_status_icon"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:layout_marginEnd="8dp"
             android:src="@drawable/ic_calendar"
-            android:layout_marginEnd="8dp" />
+            android:contentDescription="@string/label_today_status" />
 
         <TextView
             android:id="@+id/tv_today_status"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="加载中..."
-            android:textSize="16sp"
+            android:text="@string/widget_loading"
+            android:textSize="15sp"
             android:textStyle="bold"
             android:textColor="@color/text_primary"
-            android:ellipsize="end"
-            android:maxLines="1" />
-
-        <ProgressBar
-            android:id="@+id/progress_bar"
-            android:layout_width="20dp"
-            android:layout_height="20dp"
-            android:indeterminate="true"
-            android:visibility="gone" />
+            android:maxLines="2"
+            android:ellipsize="end" />
     </LinearLayout>
 
-    <!-- 周期信息 -->
     <TextView
         android:id="@+id/tv_cycle_info"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="周期 28天  ·  经期 5天"
+        android:layout_marginTop="8dp"
+        android:text="@string/widget_loading"
         android:textSize="11sp"
         android:textColor="@color/text_secondary"
-        android:layout_marginBottom="4dp" />
+        android:maxLines="1"
+        android:ellipsize="end" />
 
-    <!-- 下次经期 -->
     <TextView
         android:id="@+id/tv_next_period"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="下次: 2024-01-29"
+        android:layout_marginTop="2dp"
+        android:text="@string/widget_loading"
         android:textSize="12sp"
         android:textStyle="bold"
-        android:textColor="@color/next_blue" />
+        android:textColor="@color/next_blue"
+        android:maxLines="1"
+        android:ellipsize="end" />
 
-    <!-- 底部添加按钮 -->
-    <Button
+    <TextView
         android:id="@+id/btn_add_period"
         android:layout_width="wrap_content"
-        android:layout_height="32dp"
+        android:layout_height="wrap_content"
         android:layout_gravity="end"
         android:layout_marginTop="8dp"
-        android:text="+ 记录"
+        android:paddingLeft="12dp"
+        android:paddingRight="12dp"
+        android:paddingTop="5dp"
+        android:paddingBottom="5dp"
+        android:background="@drawable/widget_add_background"
+        android:text="@string/widget_add_period"
         android:textSize="11sp"
-        android:textAllCaps="false"
-        android:backgroundTint="@color/primary"
-        android:textColor="@android:color/white" />
+        android:textColor="@color/on_primary" />
 
 </LinearLayout>
