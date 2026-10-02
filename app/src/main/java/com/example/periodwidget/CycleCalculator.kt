@@ -48,8 +48,6 @@ object CycleCalculator {
         return abs(ChronoUnit.DAYS.between(a, b)).toInt()
     }
 
-    fun addDays(date: LocalDate?, days: Int): LocalDate? = date?.plusDays(days)
-
     fun computeStats(periods: List<PeriodEntity>): CycleStats {
         if (periods.isEmpty()) {
             return CycleStats()
