@@ -1,10 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Widget picker preview.
+
+  VectorDrawable supports only <path> (plus <group>/<clip-path>): SVG's <rect>,
+  <circle> and friends do not exist here, and every dimension needs a unit.
+  The droplet and the dot are therefore expressed as path data.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="200dp"
     android:height="120dp"
     android:viewportWidth="200"
     android:viewportHeight="120">
-    <rect android:fillColor="#FAFAFA" android:width="200" android:height="120" android:radius="8"/>
-    <path android:fillColor="#E91E63" android:pathData="M100,30 L100,30 C100,30 70,50 70,70 C70,90 100,105 100,105 C100,105 130,90 130,70 C130,50 100,30 100,30 Z"/>
-    <circle android:fillColor="#FFFFFF" android:cx="100" android:cy="70" android:r="12"/>
+
+    <path
+        android:fillColor="#FCE4EC"
+        android:pathData="M0,0h200v120h-200z" />
+
+    <path
+        android:fillColor="#E91E63"
+        android:pathData="M100,30 C100,30 76,54 76,72 C76,88 100,100 100,100 C100,100 124,88 124,72 C124,54 100,30 100,30 Z" />
+
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M100,68 m-8,0 a8,8 0 1,0 16,0 a8,8 0 1,0 -16,0" />
+
 </vector>
