@@ -618,7 +618,10 @@ private fun AddPeriodDialog(
 
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "$year年$month月$day日 · 持续 $length 天",
+                    // Braces are required: Kotlin treats CJK characters as
+                    // identifier characters, so "$year年" would parse as a
+                    // variable named "year年".
+                    "${year}年${month}月${day}日 · 持续 $length 天",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
