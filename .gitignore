@@ -1,0 +1,28 @@
+# Gradle
+.gradle/
+build/
+app/build/
+app/.gradle/
+
+# Local machine config ONLY - do NOT ignore gradle.properties
+local.properties
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+AndroidStudio*.xml
+
+# Keystore / signing (NEVER commit)
+*.keystore
+*.jks
+keystore.properties
+signing.properties
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

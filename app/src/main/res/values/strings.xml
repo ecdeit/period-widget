@@ -1,0 +1,31 @@
+<resources>
+    <string name="app_name">经期助手</string>
+    <string name="widget_label">经期小组件</string>
+    <string name="widget_description">桌面显示今日状态、周期预测与下次经期</string>
+
+    <string name="widget_cycle_info">周期 %1$d 天 · 经期 %2$d 天</string>
+    <string name="widget_next_period">下次：%1$s</string>
+    <string name="widget_no_prediction">暂无预测</string>
+    <string name="widget_add_period">＋ 记录</string>
+    <string name="widget_loading">正在读取…</string>
+
+    <string name="label_today_status">今日状态</string>
+    <string name="label_avg_cycle">平均周期</string>
+    <string name="label_avg_period">平均经期</string>
+    <string name="label_next_period">下次经期</string>
+    <string name="label_predictions">预测</string>
+    <string name="label_ovulation">排卵日</string>
+    <string name="label_fertile">易孕期</string>
+    <string name="label_history">历史记录</string>
+    <string name="label_history_empty">还没有记录，点下面的按钮添加第一条</string>
+    <string name="action_add_period">记录经期</string>
+    <string name="dialog_add_title">记录经期</string>
+    <string name="field_start_date">开始日期 YYYY-MM-DD</string>
+    <string name="field_length">持续天数 (2-10)</string>
+    <string name="action_save">保存</string>
+    <string name="action_cancel">取消</string>
+    <string name="action_delete">删除</string>
+    <string name="action_prev_month">上个月</string>
+    <string name="action_next_month">下个月</string>
+    <string name="unit_days">%1$d 天</string>
+</resources>
